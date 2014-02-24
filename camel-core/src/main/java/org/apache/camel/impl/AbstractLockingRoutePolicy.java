@@ -25,7 +25,7 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 	/**
 	 * Logger
 	 */
-	private final Logger logger = LoggerFactory.getLogger(getClass());
+	protected final Logger logger = LoggerFactory.getLogger(getClass());
 	/**
 	 * Camel context
 	 */
@@ -50,6 +50,10 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 	 * Route info indexed by Route Id
 	 */
 	private Map<String, RouteInfo> routeInfosById = new HashMap<String, RouteInfo>();
+	/**
+	 * Route lock
+	 */
+	protected RouteLock routeLock=new RouteLock("global");
 	/**
 	 * Handle on periodically running task
 	 */
@@ -108,7 +112,7 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 		synchronized (routeInfo) {
 			ServiceStatus actualStatus = simplifyRouteStatus(camelContext.getRouteStatus(route.getId()));
 			ServiceStatus expectedStatus;
-			if (tryLock(route)) {
+			if (tryLock()) {
 				// Lock obtained
 				// expected status is applied
 				expectedStatus = routeInfo.getExpectedStatus();
@@ -119,7 +123,6 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 						}
 						setActualRouteStatus(routeInfo, routeInfo.getExpectedStatus());
 					} catch (Exception e) {
-						unlock(route);
 						handleRouteStatusException(e, route, expectedStatus);
 					}
 				}
@@ -207,6 +210,7 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 					startRoute(routeInfo.getRoute());
 					break;
 			}
+			logger.debug("Route "+routeInfo.getRouteId()+" "+status);
 		} finally {
 			actualRouteIds.remove(routeInfo.getRouteId());
 			if (actualRouteIds.isEmpty()) {
@@ -224,25 +228,56 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 	private void setExpectedRouteStatus(Route route, ServiceStatus status) {
 		Set<String> actualRouteIds = actualRouteStatus.get();
 		if (actualRouteStatus.get() == null || !actualRouteIds.contains(route.getId())) {
-			withRouteInfo(route).setExpectedStatus(status);
-			checkRouteStatus(route);
+			RouteInfo routeInfo = withRouteInfo(route);
+			synchronized (routeInfo) {
+				routeInfo.setExpectedStatus(status);
+				logger.debug("Route expected status changed to " + status);
+				checkRouteStatus(route);
+			}
 		}
 	}
 
 	/**
 	 * Try to take the lock on a route
 	 *
-	 * @param route Route
 	 * @return Lock taken or not
 	 */
-	protected abstract boolean tryLock(Route route);
-
+	protected boolean tryLock() {
+		if (routeLock.isLocked(getRuntimeId(), getCurrentTimestamp())) {
+			logger.debug("Route Lock "+routeLock.getId()+" already owned");
+			return true;
+		} else {
+			synchronized (routeLock) {
+				boolean locked= doTryLock(routeLock);
+				logger.debug("Route Lock "+routeLock.getId()+" acquired:"+locked);
+				return locked;
+			}
+		}
+	}
 	/**
-	 * Release lock on a route
+	 * Try to take the lock
 	 *
-	 * @param route Route
+	 * @param routeLock Lock
+	 * @return Lock taken or not
 	 */
-	protected abstract void unlock(Route route);
+	protected abstract boolean doTryLock(RouteLock routeLock);
+	/**
+	 * Try to take the lock on a route
+	 */
+	protected void unlock() {
+		if (routeLock!=null) {
+			synchronized (routeLock) {
+				doUnlock(routeLock);
+				logger.debug("Route Lock " + routeLock.getId() + " released");
+			}
+		}
+	}
+	/**
+	 * Release lock
+	 *
+	 * @param routeLock Lock
+	 */
+	protected abstract void doUnlock(RouteLock routeLock);
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// ROUTE INFO MANAGEMENT
@@ -276,9 +311,7 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 			return expectedStatus;
 		}
 
-		public synchronized void setExpectedStatus(ServiceStatus expectedStatus) {
-			LoggerFactory.getLogger(AbstractLockingRoutePolicy.class).debug("Route expected status " + this.expectedStatus + "->" + expectedStatus);
-			Thread.dumpStack();
+		public void setExpectedStatus(ServiceStatus expectedStatus) {
 			this.expectedStatus = expectedStatus;
 		}
 	}
@@ -302,10 +335,40 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 	 * Remove {@link RouteInfo} for given Route
 	 *
 	 * @param route Route
-	 * @return
+	 * @return Removed RouteInfo
 	 */
 	private RouteInfo removeRouteInfo(Route route) {
 		return routeInfosById.remove(route.getId());
+	}
+
+	/**
+	 * Get current timestamp
+	 * @return Now timestamp
+	 */
+	protected long getCurrentTimestamp() {
+		return System.currentTimeMillis();
+	}
+
+	/**
+	 * Compute lock expiration timestamp for given current timestamp
+	 * @param currentTimestamp Current timestamp
+	 * @return Expiration timestamp
+	 */
+	protected long getExpirationTimestamp(long currentTimestamp) {
+		return currentTimestamp+2*getPeriod();
+	}
+
+	// -----------------------------------------------------------------------------------------------------------------
+	// ROUTE LOCK ID
+	public void setRouteLockId(String lockId) {
+		if (!isStopped()) {
+			throw new IllegalStateException("Changing lock is allowed only when stopped");
+		} else {
+			routeLock = new RouteLock(lockId);
+		}
+	}
+	public String getRouteLockId() {
+		return routeLock.getId();
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -319,12 +382,14 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 		if (runtimeId == null) {
 			initRuntimeId();
 		}
-		if (scheduledExecutorService == null) {
+		if (scheduledExecutorService == null || scheduledExecutorService.isShutdown()) {
 			scheduledExecutorService = camelContext.getExecutorServiceManager().newScheduledThreadPool(this, "LockingRoutePolicy", 3);
 		}
-		if (scheduledFuture != null) {
-			scheduledFuture.cancel(false);
-		}
+		startRouteStatusPoller();
+	}
+
+	private void startRouteStatusPoller() {
+		stopRouteStatusPoller();
 		scheduledFuture = scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 			@Override
 			public void run() {
@@ -332,6 +397,7 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 				checkRoutesStatus();
 			}
 		}, 0L, period, TimeUnit.MILLISECONDS);
+		logger.debug("Started route status check loop");
 	}
 
 	/**
@@ -339,11 +405,15 @@ public abstract class AbstractLockingRoutePolicy extends RoutePolicySupport impl
 	 */
 	@Override
 	protected void doStop() throws Exception {
-		for (Route route : camelContext.getRoutes()) {
-			unlock(route);
-		}
+		unlock();
+		stopRouteStatusPoller();
+	}
+
+	private void stopRouteStatusPoller() {
 		if (scheduledFuture != null) {
-			scheduledFuture.cancel(true);
+			logger.debug("Stopping route status check loop");
+			scheduledFuture.cancel(false);
+			scheduledFuture = null;
 		}
 	}
 

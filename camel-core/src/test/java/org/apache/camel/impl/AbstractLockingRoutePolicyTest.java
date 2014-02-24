@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.util.regex.Pattern;
 
 /**
+ * Unit test for {@link AbstractLockingRoutePolicy} using the {@link InMemoryLockingRoutePolicy}
  */
 public class AbstractLockingRoutePolicyTest extends ContextTestSupport {
 	private final Logger logger = LoggerFactory.getLogger(getClass());
@@ -55,7 +56,7 @@ public class AbstractLockingRoutePolicyTest extends ContextTestSupport {
 	public void testOwned_StatusChange() throws Exception {
 		// Auto start
 		assertEquals(ServiceStatus.Started, context.getRouteStatus("foo"));
-		assertTrue(lockingRoutePolicy.isLockOwned("foo"));
+		assertTrue(lockingRoutePolicy.isLockOwned());
 		// Suspend
 		context.suspendRoute("foo");
 		assertEquals(ServiceStatus.Suspended, context.getRouteStatus("foo"));
@@ -75,11 +76,11 @@ public class AbstractLockingRoutePolicyTest extends ContextTestSupport {
 	@Test
 	public void testNotOwned_StatusChange() throws Exception {
 		// Another runtime gets the lock
-		lockingRoutePolicy.forceLock("foo", "another");
+		lockingRoutePolicy.forceLock("another");
 		// Auto start
 		waitRouteStatus("foo",ServiceStatus.Suspended, 1000L);
 		assertEquals(ServiceStatus.Suspended, context.getRouteStatus("foo"));
-		assertFalse(lockingRoutePolicy.isLockOwned("foo"));
+		assertFalse(lockingRoutePolicy.isLockOwned());
 		// Suspend
 		context.suspendRoute("foo");
 		waitRouteStatus("foo",ServiceStatus.Suspended, 200L);
@@ -104,18 +105,18 @@ public class AbstractLockingRoutePolicyTest extends ContextTestSupport {
 	@Test
 	public void testRelease() throws Exception {
 		// Another runtime gets the lock, route suspends
-		lockingRoutePolicy.forceLock("foo", "another");
+		lockingRoutePolicy.forceLock("another");
 		waitRouteStatus("foo",ServiceStatus.Suspended, 1000L);
 		assertEquals(ServiceStatus.Suspended, context.getRouteStatus("foo"));
-		assertFalse(lockingRoutePolicy.isLockOwned("foo"));
+		assertFalse(lockingRoutePolicy.isLockOwned());
 
 		// Other runtime releases the lock, route starts
-		lockingRoutePolicy.forceLock("foo", null);
+		lockingRoutePolicy.forceLock(null);
 		waitRouteStatus("foo",ServiceStatus.Started, 1000L);
 		assertEquals(ServiceStatus.Started, context.getRouteStatus("foo"));
 
 		// Other runtime takes the lock again, route suspends
-		lockingRoutePolicy.forceLock("foo", "another");
+		lockingRoutePolicy.forceLock("another");
 		waitRouteStatus("foo",ServiceStatus.Suspended, 1000L);
 		assertEquals(ServiceStatus.Suspended, context.getRouteStatus("foo"));
 	}
