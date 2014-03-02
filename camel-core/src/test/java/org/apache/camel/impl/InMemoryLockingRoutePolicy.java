@@ -12,9 +12,9 @@ public class InMemoryLockingRoutePolicy extends AbstractLockingRoutePolicy {
 	protected boolean doTryLock(RouteLock routeLock) {
 		long now=getCurrentTimestamp();
 		boolean  lockable=routeLock.isLockable(getRuntimeId(), now);
-		logger.debug("Route Lockable "+routeLock.getId()+" "+lockable);
+		log.debug("Route Lockable "+routeLock.getId()+" "+lockable);
 		if (lockable) {
-			logger.debug("Route Lock "+routeLock.getId()+" acquired");
+			log.debug("Route Lock "+routeLock.getId()+" acquired");
 			routeLock.lock(getRuntimeId(), getExpirationTimestamp(now));
 		}
 		return lockable;
@@ -23,10 +23,10 @@ public class InMemoryLockingRoutePolicy extends AbstractLockingRoutePolicy {
 	@Override
 	protected void doUnlock(RouteLock routeLock) {
 		boolean locked=routeLock.isLocked(getRuntimeId(), getCurrentTimestamp());
-		logger.debug("Route locked "+routeLock.getId()+" "+locked);
+		log.debug("Route locked "+routeLock.getId()+" "+locked);
 		if (locked) {
 			// Released
-			logger.debug("Route Lock "+routeLock.getId()+" released");
+			log.debug("Route Lock "+routeLock.getId()+" released");
 			routeLock.unlock();
 		}
 	}

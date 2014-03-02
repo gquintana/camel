@@ -5,8 +5,6 @@ import org.apache.camel.ServiceStatus;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.util.FileUtil;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.util.regex.Pattern;
@@ -19,7 +17,6 @@ import static org.junit.Assert.assertThat;
  */
 public class FileLockingRoutePolicyTest extends ContextTestSupport {
 	public File tempFolder;
-	private final Logger logger = LoggerFactory.getLogger(getClass());
 	private FileLockingRoutePolicy lockingRoutePolicy = new FileLockingRoutePolicy();
 	@Override
 	protected RouteBuilder createRouteBuilder() throws Exception {
@@ -69,7 +66,7 @@ public class FileLockingRoutePolicyTest extends ContextTestSupport {
 			fileWriter.write(content);
 			fileWriter.flush();
 			fileWriter.close();
-			logger.debug("Wrote lock file " + content);
+			log.debug("Wrote lock file " + content);
 		} finally {
 			closeSilently(fileWriter);
 		}
@@ -183,18 +180,18 @@ public class FileLockingRoutePolicyTest extends ContextTestSupport {
 		freeMappedLockFile();
 		writeFile(lockFile, "global\ttwo\t" + Long.MAX_VALUE);
 		waitLockFileContent("global\ttwo\t", 1000L);
-		logger.debug("Lock acquired by two");
+		log.debug("Lock acquired by two");
 		context.start();
 		assertThat(readFile(lockFile), startsWith("global\ttwo"));
 		waitRouteStatus("foo", ServiceStatus.Suspended, 1000L);
-		logger.debug("Route suspended");
+		log.debug("Route suspended");
 		// Runtime two releases lock
 		freeMappedLockFile();
 		writeFile(lockFile, "");
-		logger.debug("Lock released by two");
+		log.debug("Lock released by two");
 		// Runtime one restarts route
 		waitRouteStatus("foo", ServiceStatus.Started, 1000L);
-		logger.debug("Route started");
+		log.debug("Route started");
 		waitLockFileContent("global\tone\t", 1000L);
 	}
 

@@ -79,10 +79,10 @@ public class FileLockingRoutePolicy extends AbstractLockingRoutePolicy {
 		}
 		if (content==null || content.isEmpty()) {
 			lock.unlock();
-			logger.debug("Read lock file: empty");
+			log.debug("Read lock file: empty");
 			return;
 		}
-		logger.debug("Read lock file:"+content);
+		log.debug("Read lock file:"+content);
 		String[] parts = content.split("\\t");
 		if (parts.length == 3) {
 			String lockId = parts[0];
@@ -120,7 +120,7 @@ public class FileLockingRoutePolicy extends AbstractLockingRoutePolicy {
 		ByteBuffer byteBuffer1 = charset.encode(content);
 		byteBuffer.put(byteBuffer1);
 		byteBuffer.limit(byteBuffer1.limit());
-		logger.debug("Wrote lock file:" + content);
+		log.debug("Wrote lock file:" + content);
 		return byteBuffer1.limit();
 	}
 
@@ -157,7 +157,7 @@ public class FileLockingRoutePolicy extends AbstractLockingRoutePolicy {
 			boolean readOnly=false;
 			if (randomAccessFile == null) {
 				File lockFile = getLockFile(lock.getId());
-				logger.debug("Lock file "+lockFile);
+				log.debug("Lock file "+lockFile);
 				// Create file
 				if (!lockFile.exists()) {
 					FileUtil.createNewFile(lockFile); // Won't throw file already exists
@@ -187,10 +187,10 @@ public class FileLockingRoutePolicy extends AbstractLockingRoutePolicy {
 			// Map file
 			if (byteBuffer==null) {
 				if (readOnly) {
-					logger.debug("Opening lock file RO");
+					log.debug("Opening lock file RO");
 					byteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileBufferSize);
 				} else {
-					logger.debug("Opening lock file R/W");
+					log.debug("Opening lock file R/W");
 					byteBuffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, fileBufferSize);
 				}
 			}
@@ -212,10 +212,10 @@ public class FileLockingRoutePolicy extends AbstractLockingRoutePolicy {
 				}
 			}
 		} catch (IOException e) {
-			logger.warn("File lock read/write failed", e);
+			log.warn("File lock read/write failed", e);
 			closeAllSilently(fileLock, fileChannel, randomAccessFile);
 		} finally {
-			logger.debug("Set Lock file data "+finalLockFileData);
+			log.debug("Set Lock file data "+finalLockFileData);
 			lock.setData(finalLockFileData);
 		}
 		return routeLocked;
@@ -237,10 +237,10 @@ public class FileLockingRoutePolicy extends AbstractLockingRoutePolicy {
 					write(byteBuffer, lock);
 				}
 			} catch (IOException e) {
-				logger.warn("File unlock writing failed", e);
+				log.warn("File unlock writing failed", e);
 			} finally {
 				closeAllSilently(lockFileData.getFileLock(), lockFileData.getFileChannel(), lockFileData.getRandomAccessFile());
-				logger.debug("Clear Lock file data");
+				log.debug("Clear Lock file data");
 				lock.setData(null);
 			}
 		}

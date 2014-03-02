@@ -4,8 +4,6 @@ import org.apache.camel.ContextTestSupport;
 import org.apache.camel.ServiceStatus;
 import org.apache.camel.builder.RouteBuilder;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.regex.Pattern;
 
@@ -13,7 +11,6 @@ import java.util.regex.Pattern;
  * Unit test for {@link AbstractLockingRoutePolicy} using the {@link InMemoryLockingRoutePolicy}
  */
 public class AbstractLockingRoutePolicyTest extends ContextTestSupport {
-	private final Logger logger = LoggerFactory.getLogger(getClass());
 	private InMemoryLockingRoutePolicy lockingRoutePolicy = new InMemoryLockingRoutePolicy();
 
 	@Override
@@ -40,7 +37,7 @@ public class AbstractLockingRoutePolicyTest extends ContextTestSupport {
 	private void waitRouteStatus(String routeId, ServiceStatus expectedStatus, long timeout) throws InterruptedException {
 		long start=System.currentTimeMillis();
 		ServiceStatus actualStatus;
-		logger.debug("Waiting for route "+routeId+" to be state "+expectedStatus);
+		log.debug("Waiting for route "+routeId+" to be state "+expectedStatus);
 		while((actualStatus=context.getRouteStatus(routeId))!=expectedStatus && (System.currentTimeMillis()-start)<timeout) {
 			Thread.sleep(100L);
 		}
