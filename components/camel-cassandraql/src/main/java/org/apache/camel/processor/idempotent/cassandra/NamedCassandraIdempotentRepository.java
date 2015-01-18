@@ -31,20 +31,22 @@ public class NamedCassandraIdempotentRepository<K> extends CassandraIdempotentRe
 
     public NamedCassandraIdempotentRepository(Session session, String name) {
         super(session);
+        setPKColumns("NAME", "KEY");
         setName(name);
     }
 
     public NamedCassandraIdempotentRepository(Cluster cluster, String keyspace, String name) {
         super(cluster, keyspace);
+        setPKColumns("NAME", "KEY");
         setName(name);
     }
 
     public String getName() {
-        return getPKColumns()[0];
+        return (String) getPrefixPKValues()[0];
     }
 
     public final void setName(String name) {
-        setPKColumns(name);
+        setPrefixPKValues(new String[]{name});
     }
 
 }
